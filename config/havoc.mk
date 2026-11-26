@@ -10,9 +10,6 @@ $(call inherit-product, vendor/lineage/config/fonts.mk)
 # Themed icons
 $(call inherit-product, packages/overlays/ThemeIcons/config.mk)
 
-# Pixel Framework
-$(call inherit-product, vendor/pixel-framework/config.mk)
-
 # Additional props
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     drm.service.enabled=true \
@@ -103,7 +100,7 @@ ifeq ($(TARGET_FACE_UNLOCK_SUPPORTED),true)
         ro.face.sense_service.enabled=true
     PRODUCT_COPY_FILES += \
         frameworks/native/data/etc/android.hardware.biometrics.face.xml:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/permissions/android.hardware.biometrics.face.xml
-else
+else ifeq ($(WITH_GMS),true)
     PRODUCT_PACKAGES += \
         SettingsGoogleFutureFaceEnroll
 endif
@@ -115,6 +112,9 @@ TARGET_INCLUDE_LIVE_WALLPAPERS ?= true
 TARGET_SUPPORTS_QUICK_TAP ?= false
 TARGET_SUPPORTS_CALL_RECORDING ?= true
 
+# Google apps and their SystemUI wallpaper picker resource
 ifeq ($(WITH_GMS),true)
+$(call inherit-product, vendor/pixel-framework/config.mk)
 $(call inherit-product-if-exists, vendor/gms/products/gms.mk)
+PRODUCT_PACKAGE_OVERLAYS += vendor/lineage/overlay/gms
 endif

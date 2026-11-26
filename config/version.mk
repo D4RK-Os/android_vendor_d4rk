@@ -9,10 +9,10 @@ ifndef HAVOC_BUILD_TYPE
 endif
 
 # Build variant
-ifeq ($(WITH_GAPPS),false)
-    HAVOC_BUILD_VARIANT = Vanilla
-else
+ifeq ($(WITH_GMS),true)
     HAVOC_BUILD_VARIANT = GApps
+else
+    HAVOC_BUILD_VARIANT = Vanilla
 endif
 
 # Internal version
