@@ -9,11 +9,7 @@ ifndef HAVOC_BUILD_TYPE
 endif
 
 # Build variant
-ifeq ($(WITH_GMS),true)
-    HAVOC_BUILD_VARIANT = GApps
-else
-    HAVOC_BUILD_VARIANT = Vanilla
-endif
+HAVOC_BUILD_VARIANT := Vanilla
 
 # Internal version
 LINEAGE_VERSION := D4RK-Os-v$(HAVOC_VERSION)-$(shell date +%Y%m%d)-$(LINEAGE_BUILD)-$(HAVOC_BUILD_TYPE)-$(HAVOC_BUILD_VARIANT)

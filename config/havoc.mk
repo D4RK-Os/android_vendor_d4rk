@@ -60,28 +60,9 @@ PRODUCT_SYSTEM_SERVER_COMPILER_FILTER := speed-profile
 PRODUCT_USE_PROFILE_FOR_BOOT_IMAGE := true
 PRODUCT_DEX_PREOPT_BOOT_IMAGE_PROFILE_LOCATION := frameworks/base/config/boot-image-profile.txt
 
-# Gboard configuration
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.com.google.ime.theme_id=5 \
-    ro.com.google.ime.system_lm_dir=/product/usr/share/ime/google/d3_lms
-
 # StorageManager configuration
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.storage_manager.show_opt_in=false
-
-# OPA configuration
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.opa.eligible_device=true
-
-# Google legal
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.url.legal=http://www.google.com/intl/%s/mobile/android/basic/phone-legal.html \
-    ro.url.legal.android_privacy=http://www.google.com/intl/%s/mobile/android/basic/privacy.html
-
-# Google Play services configuration
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.error.receiver.system.apps=com.google.android.gms \
-    ro.atrace.core.services=com.google.android.gms,com.google.android.gms.ui,com.google.android.gms.persistent
 
 # Use gestures by default
 PRODUCT_PRODUCT_PROPERTIES += \
@@ -100,21 +81,4 @@ ifeq ($(TARGET_FACE_UNLOCK_SUPPORTED),true)
         ro.face.sense_service.enabled=true
     PRODUCT_COPY_FILES += \
         frameworks/native/data/etc/android.hardware.biometrics.face.xml:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/permissions/android.hardware.biometrics.face.xml
-else ifeq ($(WITH_GMS),true)
-    PRODUCT_PACKAGES += \
-        SettingsGoogleFutureFaceEnroll
-endif
-
-# Pixel customization
-TARGET_SUPPORTS_GOOGLE_RECORDER ?= true
-TARGET_INCLUDE_STOCK_ARCORE ?= true
-TARGET_INCLUDE_LIVE_WALLPAPERS ?= true
-TARGET_SUPPORTS_QUICK_TAP ?= false
-TARGET_SUPPORTS_CALL_RECORDING ?= true
-
-# Google apps and their SystemUI wallpaper picker resource
-ifeq ($(WITH_GMS),true)
-$(call inherit-product, vendor/pixel-framework/config.mk)
-$(call inherit-product, vendor/gms/products/gms.mk)
-PRODUCT_PACKAGE_OVERLAYS += vendor/lineage/overlay/gms
 endif
