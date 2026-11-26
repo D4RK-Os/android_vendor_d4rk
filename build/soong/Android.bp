@@ -392,6 +392,8 @@ soong_config_module_type {
 
 qti_vibrator_hal {
     name: "qti_vibrator_hal_defaults",
+    // The pinned Qualcomm Vibrator.cpp uses open() without including fcntl.h.
+    cppflags: ["-include fcntl.h"],
     soong_config_variables: {
         qti_vibrator_use_effect_stream: {
             cppflags: ["-DUSE_EFFECT_STREAM"],
