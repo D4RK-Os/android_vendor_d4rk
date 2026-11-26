@@ -115,6 +115,6 @@ TARGET_SUPPORTS_CALL_RECORDING ?= true
 # Google apps and their SystemUI wallpaper picker resource
 ifeq ($(WITH_GMS),true)
 $(call inherit-product, vendor/pixel-framework/config.mk)
-$(call inherit-product-if-exists, vendor/gms/products/gms.mk)
+$(call inherit-product, vendor/gms/products/gms.mk)
 PRODUCT_PACKAGE_OVERLAYS += vendor/lineage/overlay/gms
 endif
