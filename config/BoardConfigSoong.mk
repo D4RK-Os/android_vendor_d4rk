@@ -28,6 +28,7 @@ $(foreach v,$(EXPORT_TO_SOONG),$(eval $(call addVar,$(v))))
 
 SOONG_CONFIG_NAMESPACES += lineageGlobalVars
 SOONG_CONFIG_lineageGlobalVars += \
+    needs_netd_direct_connect_rule \
     aapt_version_code \
     additional_gralloc_10_usage_bits \
     bootloader_message_offset \
@@ -112,3 +113,4 @@ SOONG_CONFIG_lineageQcomVars_qcom_display_headers_namespace := vendor/qcom/opens
 else
 SOONG_CONFIG_lineageQcomVars_qcom_display_headers_namespace := $(QCOM_SOONG_NAMESPACE)/display
 endif
+SOONG_CONFIG_lineageGlobalVars_needs_netd_direct_connect_rule := $(TARGET_NEEDS_NETD_DIRECT_CONNECT_RULE)

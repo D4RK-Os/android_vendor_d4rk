@@ -1,3 +1,6 @@
+# D4RK Os apps
+PRODUCT_PACKAGES += AloneTools FallBaskets LazerSavunucu
+
 # Audio
 $(call inherit-product, vendor/lineage/config/audio.mk)
 
@@ -112,6 +115,6 @@ TARGET_INCLUDE_LIVE_WALLPAPERS ?= true
 TARGET_SUPPORTS_QUICK_TAP ?= false
 TARGET_SUPPORTS_CALL_RECORDING ?= true
 
-# GApps
+ifeq ($(WITH_GMS),true)
 $(call inherit-product-if-exists, vendor/gms/products/gms.mk)
-$(call inherit-product-if-exists, vendor/googleapps/googleapps.mk)
+endif

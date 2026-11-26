@@ -193,6 +193,9 @@ PRODUCT_PACKAGES += \
 endif
 endif
 
+# Launcher
+PRODUCT_PACKAGES += TrebuchetQuickStep
+
 # SystemUI
 PRODUCT_DEXPREOPT_SPEED_APPS += \
     Launcher3QuickStep \
