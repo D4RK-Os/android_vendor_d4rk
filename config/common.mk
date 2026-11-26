@@ -117,7 +117,6 @@ PRODUCT_PACKAGES += \
 
 # Lineage packages
 PRODUCT_PACKAGES += \
-    LineageParts \
     LineageSettingsProvider \
     LineageSetupWizard \
     Updater
