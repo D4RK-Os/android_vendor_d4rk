@@ -1,313 +1,114 @@
-#!/usr/bin/env python
-# Copyright (C) 2012-2013, The CyanogenMod Project
-#           (C) 2017-2018,2020-2021, The LineageOS Project
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+#!/usr/bin/env python3
+# D4RK Os roomservice: "breakfast <device>" fetches the device tree and its
+# lineage.dependencies from the D4RK-Os GitHub org (no LineageOS lookup).
+import json, os, subprocess, sys, urllib.request
+import xml.etree.ElementTree as ET
 
-from __future__ import print_function
+ORG = os.environ.get("D4RK_ORG", "D4RK-Os")
+BRANCH = os.environ.get("D4RK_DEVICE_BRANCH", "thirteen")
+LOCAL = ".repo/local_manifests/roomservice.xml"
 
-import base64
-import glob
-import json
-import netrc
-import os
-import re
-import sys
-try:
-  # For python3
-  import urllib.error
-  import urllib.parse
-  import urllib.request
-except ImportError:
-  # For python2
-  import imp
-  import urllib2
-  import urlparse
-  urllib = imp.new_module('urllib')
-  urllib.error = urllib2
-  urllib.parse = urlparse
-  urllib.request = urllib2
 
-from xml.etree import ElementTree
+def tree_root():
+    d = os.getcwd()
+    while d != "/":
+        if os.path.isdir(os.path.join(d, ".repo")):
+            return d
+        d = os.path.dirname(d)
+    sys.exit("roomservice: .repo not found")
 
-product = sys.argv[1]
 
-if len(sys.argv) > 2:
-    depsonly = sys.argv[2]
-else:
-    depsonly = None
+def api(url):
+    req = urllib.request.Request(url)
+    tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if tok:
+        req.add_header("Authorization", "token " + tok)
+    return json.load(urllib.request.urlopen(req))
 
-try:
-    device = product[product.index("_") + 1:]
-except:
-    device = product
 
-if not depsonly:
-    print("Device %s not found. Attempting to retrieve device repository from LineageOS Github (http://github.com/LineageOS)." % device)
+def org_repos():
+    out, page = [], 1
+    while True:
+        r = api("https://api.github.com/orgs/%s/repos?per_page=100&page=%d" % (ORG, page))
+        if not r:
+            return out
+        out += [x["name"] for x in r]
+        page += 1
 
-repositories = []
 
-try:
-    authtuple = netrc.netrc().authenticators("api.github.com")
-
-    if authtuple:
-        auth_string = ('%s:%s' % (authtuple[0], authtuple[2])).encode()
-        githubauth = base64.encodestring(auth_string).decode().replace('\n', '')
-    else:
-        githubauth = None
-except:
-    githubauth = None
-
-def add_auth(githubreq):
-    if githubauth:
-        githubreq.add_header("Authorization","Basic %s" % githubauth)
-
-if not depsonly:
-    githubreq = urllib.request.Request("https://raw.githubusercontent.com/LineageOS/mirror/main/default.xml")
+def manifest_paths():
     try:
-        result = ElementTree.fromstring(urllib.request.urlopen(githubreq).read().decode())
-    except urllib.error.URLError:
-        print("Failed to fetch data from GitHub")
-        sys.exit(1)
-    except ValueError:
-        print("Failed to parse return data from GitHub")
-        sys.exit(1)
-    for res in result.findall('.//project'):
-        repositories.append(res.attrib['name'][10:])
+        xml = subprocess.check_output(["repo", "manifest"], stderr=subprocess.DEVNULL).decode()
+        return {p.get("path") or p.get("name") for p in ET.fromstring(xml).iter("project")}
+    except Exception:
+        return set()
 
-local_manifests = r'.repo/local_manifests'
-if not os.path.exists(local_manifests): os.makedirs(local_manifests)
 
-def exists_in_tree(lm, path):
-    for child in lm.getchildren():
-        if child.attrib['path'] == path:
-            return True
-    return False
-
-# in-place prettyprint formatter
-def indent(elem, level=0):
-    i = "\n" + level*"  "
-    if len(elem):
-        if not elem.text or not elem.text.strip():
-            elem.text = i + "  "
-        if not elem.tail or not elem.tail.strip():
-            elem.tail = i
-        for elem in elem:
-            indent(elem, level+1)
-        if not elem.tail or not elem.tail.strip():
-            elem.tail = i
-    else:
-        if level and (not elem.tail or not elem.tail.strip()):
-            elem.tail = i
-
-def get_manifest_path():
-    '''Find the current manifest path
-    In old versions of repo this is at .repo/manifest.xml
-    In new versions, .repo/manifest.xml includes an include
-    to some arbitrary file in .repo/manifests'''
-
-    m = ElementTree.parse(".repo/manifest.xml")
+def add_project(name, path, remote, revision):
+    os.makedirs(os.path.dirname(LOCAL), exist_ok=True)
+    root = ET.parse(LOCAL).getroot() if os.path.exists(LOCAL) else ET.Element("manifest")
+    if any(p.get("path") == path for p in root.iter("project")):
+        return
+    ET.SubElement(root, "project", {"name": name, "path": path, "remote": remote, "revision": revision})
     try:
-        m.findall('default')[0]
-        return '.repo/manifest.xml'
-    except IndexError:
-        return ".repo/manifests/{}".format(m.find("include").get("name"))
+        ET.indent(root)
+    except AttributeError:
+        pass
+    ET.ElementTree(root).write(LOCAL, encoding="utf-8", xml_declaration=True)
+    print("roomservice: added %s -> %s (%s)" % (name, path, revision))
 
-def get_default_revision():
-    m = ElementTree.parse(get_manifest_path())
-    d = m.findall('default')[0]
-    r = d.get('revision')
-    return r.replace('refs/heads/', '').replace('refs/tags/', '')
 
-def get_from_manifest(devicename):
-    for path in glob.glob(".repo/local_manifests/*.xml"):
-        try:
-            lm = ElementTree.parse(path)
-            lm = lm.getroot()
-        except:
-            lm = ElementTree.Element("manifest")
+def sync(paths):
+    if paths:
+        subprocess.call(["repo", "sync", "-c", "--no-tags", "--no-clone-bundle",
+                         "--force-sync", "-j8"] + paths)
 
-        for localpath in lm.findall("project"):
-            if re.search("android_device_.*_%s$" % device, localpath.get("name")):
-                return localpath.get("path")
 
-    return None
+def fetch_deps(path):
+    f = os.path.join(path, "lineage.dependencies")
+    if not os.path.isfile(f):
+        return
+    deps = json.load(open(f))
+    known = manifest_paths()
+    todo = []
+    for d in deps:
+        repo, tp = d["repository"], d["target_path"]
+        remote = d.get("remote") or ("d4rk-github" if "/" in repo else "d4rk")
+        if tp not in known:
+            add_project(repo, tp, remote, d.get("branch", BRANCH))
+        if not os.path.isdir(tp):
+            todo.append(tp)
+    sync(todo)
+    for d in deps:
+        fetch_deps(d["target_path"])
 
-def is_in_manifest(projectpath):
-    for path in glob.glob(".repo/local_manifests/*.xml"):
-        try:
-            lm = ElementTree.parse(path)
-            lm = lm.getroot()
-        except:
-            lm = ElementTree.Element("manifest")
 
-        for localpath in lm.findall("project"):
-            if localpath.get("path") == projectpath:
-                return True
+def main():
+    if len(sys.argv) < 2:
+        sys.exit("usage: roomservice.py <device>")
+    device = sys.argv[1]
+    for pre in ("lineage_", "havoc_", "d4rk_"):
+        if device.startswith(pre):
+            device = device[len(pre):]
+    device = device.split("-")[0]
+    os.chdir(tree_root())
 
-    # Search in main manifest, too
-    try:
-        lm = ElementTree.parse(get_manifest_path())
-        lm = lm.getroot()
-    except:
-        lm = ElementTree.Element("manifest")
+    path = None
+    for p in manifest_paths():
+        if p.startswith("device/") and p.count("/") == 2 and p.endswith("/" + device):
+            path = p
+    if path is None:
+        pre, suf = "android_device_", "_" + device
+        match = [r for r in org_repos() if r.startswith(pre) and r.endswith(suf)]
+        if not match:
+            print("Repository for %s not found in github.com/%s" % (device, ORG))
+            sys.exit(1)
+        name = match[0]
+        vendor = name[len(pre):-len(suf)]
+        path = "device/%s/%s" % (vendor, device)
+        add_project(name, path, "d4rk", BRANCH)
+        sync([path])
+    fetch_deps(path)
 
-    for localpath in lm.findall("project"):
-        if localpath.get("path") == projectpath:
-            return True
 
-    # ... and don't forget the lineage snippet
-    try:
-        lm = ElementTree.parse(".repo/manifests/snippets/lineage.xml")
-        lm = lm.getroot()
-    except:
-        lm = ElementTree.Element("manifest")
-
-    for localpath in lm.findall("project"):
-        if localpath.get("path") == projectpath:
-            return True
-
-    return False
-
-def add_to_manifest(repositories):
-    try:
-        lm = ElementTree.parse(".repo/local_manifests/roomservice.xml")
-        lm = lm.getroot()
-    except:
-        lm = ElementTree.Element("manifest")
-
-    for repository in repositories:
-        repo_name = repository['repository']
-        repo_target = repository['target_path']
-        repo_revision = repository['branch']
-        print('Checking if %s is fetched from %s' % (repo_target, repo_name))
-        if is_in_manifest(repo_target):
-            print('LineageOS/%s already fetched to %s' % (repo_name, repo_target))
-            continue
-
-        print('Adding dependency: LineageOS/%s -> %s' % (repo_name, repo_target))
-        project = ElementTree.Element("project", attrib = {
-            "path": repo_target,
-            "remote": "github",
-            "name": "LineageOS/%s" % repo_name,
-            "revision": repo_revision })
-        lm.append(project)
-
-    indent(lm, 0)
-    raw_xml = ElementTree.tostring(lm).decode()
-    raw_xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + raw_xml
-
-    f = open('.repo/local_manifests/roomservice.xml', 'w')
-    f.write(raw_xml)
-    f.close()
-
-def fetch_dependencies(repo_path):
-    print('Looking for dependencies in %s' % repo_path)
-    dependencies_path = repo_path + '/lineage.dependencies'
-    syncable_repos = []
-    verify_repos = []
-
-    if os.path.exists(dependencies_path):
-        dependencies_file = open(dependencies_path, 'r')
-        dependencies = json.loads(dependencies_file.read())
-        fetch_list = []
-
-        for dependency in dependencies:
-            if not is_in_manifest(dependency['target_path']):
-                fetch_list.append(dependency)
-                syncable_repos.append(dependency['target_path'])
-                if 'branch' not in dependency:
-                    dependency['branch'] = get_default_or_fallback_revision(dependency['repository'])
-            verify_repos.append(dependency['target_path'])
-
-            if not os.path.isdir(dependency['target_path']):
-                syncable_repos.append(dependency['target_path'])
-
-        dependencies_file.close()
-
-        if len(fetch_list) > 0:
-            print('Adding dependencies to manifest')
-            add_to_manifest(fetch_list)
-    else:
-        print('%s has no additional dependencies.' % repo_path)
-
-    if len(syncable_repos) > 0:
-        print('Syncing dependencies')
-        os.system('repo sync --force-sync %s' % ' '.join(syncable_repos))
-
-    for deprepo in verify_repos:
-        fetch_dependencies(deprepo)
-
-def has_branch(branches, revision):
-    return revision in [branch['name'] for branch in branches]
-
-def get_default_revision_no_minor():
-    return get_default_revision().rsplit('.', 1)[0]
-
-def get_default_or_fallback_revision(repo_name):
-    default_revision = get_default_revision()
-    print("Default revision: %s" % default_revision)
-    print("Checking branch info")
-
-    githubreq = urllib.request.Request("https://api.github.com/repos/LineageOS/" + repo_name + "/branches")
-    add_auth(githubreq)
-    result = json.loads(urllib.request.urlopen(githubreq).read().decode())
-    if has_branch(result, default_revision):
-        return default_revision
-
-    fallbacks = [ get_default_revision_no_minor() ]
-    if os.getenv('ROOMSERVICE_BRANCHES'):
-        fallbacks += list(filter(bool, os.getenv('ROOMSERVICE_BRANCHES').split(' ')))
-
-    for fallback in fallbacks:
-        if has_branch(result, fallback):
-            print("Using fallback branch: %s" % fallback)
-            return fallback
-
-    print("Default revision %s not found in %s. Bailing." % (default_revision, repo_name))
-    print("Branches found:")
-    for branch in [branch['name'] for branch in result]:
-        print(branch)
-    print("Use the ROOMSERVICE_BRANCHES environment variable to specify a list of fallback branches.")
-    sys.exit()
-
-if depsonly:
-    repo_path = get_from_manifest(device)
-    if repo_path:
-        fetch_dependencies(repo_path)
-    else:
-        print("Trying dependencies-only mode on a non-existing device tree?")
-
-    sys.exit()
-
-else:
-    for repo_name in repositories:
-        if re.match(r"^android_device_[^_]*_" + device + "$", repo_name):
-            print("Found repository: %s" % repo_name)
-            
-            manufacturer = repo_name.replace("android_device_", "").replace("_" + device, "")
-            repo_path = "device/%s/%s" % (manufacturer, device)
-            revision = get_default_or_fallback_revision(repo_name)
-
-            device_repository = {'repository':repo_name,'target_path':repo_path,'branch':revision}
-            add_to_manifest([device_repository])
-
-            print("Syncing repository to retrieve project.")
-            os.system('repo sync --force-sync %s' % repo_path)
-            print("Repository synced!")
-
-            fetch_dependencies(repo_path)
-            print("Done")
-            sys.exit()
-
-print("Repository for %s not found in the LineageOS Github repository list. If this is in error, you may need to manually add it to your local_manifests/roomservice.xml." % device)
+main()
